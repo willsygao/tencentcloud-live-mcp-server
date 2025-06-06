@@ -1,0 +1,18 @@
+[project]
+name = "tencentcloud-mcp-server"
+version = "0.1.1"
+description = "Tencent Cloud API server implemented based on Model Context Protocol (MCP)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "tencentcloud-sdk-python>=3.0.0",
+    "requests>=2.32.3",
+    "mcp>=1.6.0",
+]
+
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+tencentcloudapi-mcp-server = "server:main" 
