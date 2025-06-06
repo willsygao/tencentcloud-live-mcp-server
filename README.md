@@ -27,7 +27,7 @@ uv run src/server.py
       "command": "npx",
       "args": [
         "-y",
-        "@tencent/mcprouter@0.1.10"
+        "@tencent/mcprouter"
       ],
       "env": {
         "VEDAS_MCP_URL": "------> 替换成你自己的 url <------",
