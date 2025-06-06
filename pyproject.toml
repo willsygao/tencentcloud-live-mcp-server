@@ -17,4 +17,8 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project.scripts]
-tencentcloudapi-mcp-server = "server:main" 
+tencentcloudapi-mcp-server = "server:main"
+
+[project.urls]
+Homepage = "https://github.com/willsygao/tencentcloud-live-mcp-server"
+Repository = "https://github.com/willsygao/tencentcloud-live-mcp-server.git"
