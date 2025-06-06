@@ -1,4 +1,10 @@
 [project]
+authors = [
+    {name = "willsygao", email = "shuoyuan.gao0102@gmail.com"},
+]
+maintainers = [
+    {name = "willsygao", email = "shuoyuan.gao0102@gmail.com"}
+]
 name = "tencentcloud-live-mcp-server"
 version = "1.0.0"
 description = "Tencent Cloud API server implemented based on Model Context Protocol (MCP)"
@@ -17,7 +23,7 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project.scripts]
-tencentcloudapi-mcp-server = "server:main"
+tencentcloud-live-mcp-server = "server:main"
 
 [project.urls]
 Homepage = "https://github.com/willsygao/tencentcloud-live-mcp-server"
