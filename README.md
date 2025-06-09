@@ -1,8 +1,13 @@
 # 腾讯云直播服务
+
 本服务基于Model Context Protocol（MCP）实现提供腾讯云直播API调用Tools的MCP Server，提供腾讯云直播域名管理、拉流转推、直播流管理和流管理等相关接口。
+
 ## 简介
+
 本项目主要为大语言模型提供通过自然语言调用腾讯云直播API，管理腾讯云直播服务的能力。
+
 ## 依赖环境
+
 - Python 1.12
 - 腾讯云API密钥（ [腾讯云控制台申请](https://console.cloud.tencent.com/cam/capi) ）
     - TENCENTCLOUD_SECRET_ID
@@ -12,61 +17,40 @@
 ## 获取安装
 
 ### 本地运行Server
+
 ``` 
+# 配置环境变量
+export TENCENTCLOUD_SECRET_ID="您的腾讯云SecretId"
+export TENCENTCLOUD_SECRET_KEY="您的腾讯云SecretId"
+
+# 启动服务
 uv run src/server.py
 ```
 ### Cursor中使用
-目前本项目已经部署在[Vedas](https://ai.woa.com/#/vedas/mcp-market/list) ，可以在平台上创建实例，获取生成的专属url以及token，通过下面的配置使用。
+#### 通过发布在PyPI的包使用
+
+先决条件：[uv包管理器](https://docs.astral.sh/uv/getting-started/installation/)
+
+需要注意的是，你必须安装好了uvx才可以进行Cursor的配置。
 
 ``` 
 {
   "mcpServers": {
-    "test1_1": {
-      "disabled": false,
-      "timeout": 60,
-      "command": "npx",
+    "tencentcloud-live-mcp-server": {
+      "command": "uvx",
       "args": [
-        "-y",
-        "@tencent/mcprouter"
+        "tencentcloud-live-mcp-server"
       ],
       "env": {
-        "VEDAS_MCP_URL": "------> 替换成你自己的 url <------",
-        "VEDAS_TOKEN": "------> 替换成你自己的 token <------"
-      },
-      "transportType": "stdio"
+        "TENCENTCLOUD_SECRET_ID": "------> 替换成你自己的 ID <------",
+        "TENCENTCLOUD_SECRET_KEY": "------> 替换成你自己的 KEY <------"
+      }
     }
   }
 }
 ```
-需要注意的是，你需要提前安装好npx工具。
-
-``` 
-# Download and install nvm:
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.2/install.sh | bash
-
-# in lieu of restarting the shell
-\. "$HOME/.nvm/nvm.sh"
-
-# Download and install Node.js:
-nvm install 22
-
-# Verify the Node.js version:
-node -v # Should print "v22.14.0".
-nvm current # Should print "v22.14.0".
-
-# Verify npm version:
-npm -v # Should print "10.9.2".
-
-# 设置腾讯源
-npm config set registry https://mirrors.tencent.com/npm/
-
-# 安装npx
-sudo npm install -g npx
-
-# 验证npx
-npx --version
-```
 完成后重启Cursor完成配置。
+
 ## 功能
 - Tools
     - 域名管理
@@ -98,3 +82,16 @@ npx --version
         - 删除转码规则
 
 ## 使用场景
+MCP Server 特别适用于以下需要高效、灵活管理和操作腾讯云直播资源的场景：
+- 构建直播中台或 PaaS 平台：
+  - 场景：企业需要为内部多个业务线（如电商、教育、活动直播）或外部客户提供统一的直播管理和操控后台。
+  - MCP 价值：MCP Server 作为中间层，屏蔽了腾讯云直播 API 的复杂细节，业务团队只需调用简单的 MCP 接口即可完成域名配置、流推拉、转推禁推等操作，无需各自学习和维护与腾讯云的直连逻辑，平台更容易维护和扩展。
+  - 举例：电商大促期间，多个直播间需要临时创建专属的推拉流域名并进行拉流转推确保高并发流畅播放，平台运营人员通过统一的 MCP 管理界面可以快速批量操作。
+- 简化跨系统集成与自动化：
+  - 场景：直播功能需要无缝集成到企业的 CRM、活动管理系统、内容管理平台（CMS）、自动化运维系统中。 
+  - MCP 价值：MCP 提供的标准化、语义化的接口极大简化了集成工作。其他系统只需通过 MCP 定义好的自然语言内容发起请求，就能触发复杂的直播操作（拉流->转码->转推）。自动化脚本也更易编写和维护。 
+  - 举例：在线教育平台中，当老师排课后，系统自动通过 MCP Tools 为这节课预定直播推流域名和播放域名；课程开始前 5 分钟自动发起拉流转推任务，确保生成多种清晰度的播放流；课程结束后自动停止转推并生成回放。
+- 实现灵活可配置的云导播：
+  - 场景：需要快速切换不同直播源（摄像机信号、远程连线、视频文件、其他直播间）到同一个直播间，或者需要在直播流上叠加图文（台标、字幕）、进行画面切换、录制等操作。
+  - MCP 价值：MCP 封装了腾讯云导播台的复杂 API，提供简洁命令来控制导播流程。方便搭建灵活的网页导播控制台或集成到现有的播控系统中。
+  - 举例：一场线上发布会，导播人员通过集成了 MCP 的简易控制台，点击按钮即可在“主持人近景”、“PPT屏幕”、“嘉宾连线画面”之间流畅切换，并在关键时刻叠加重要信息。
