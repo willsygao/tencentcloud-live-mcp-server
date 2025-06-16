@@ -19,6 +19,8 @@ import base64
 import hashlib
 import requests
 import argparse
+from datetime import datetime, timedelta
+import time
 
 # 第三方库导入
 from mcp.server.fastmcp import Context, FastMCP
@@ -37,6 +39,20 @@ MCP_SERVER_NAME = "tencent-cloud-mcp-server"
 # 设置日志
 logger = setup_logger(MCP_SERVER_NAME)
 
+# MD5
+def md5_encrypt(input_string):
+    # 创建一个MD5哈希对象
+    md5_hash = hashlib.md5()
+
+    # 将输入字符串编码为字节
+    input_bytes = input_string.encode('utf-8')
+
+    # 更新哈希值
+    md5_hash.update(input_bytes)
+
+    # 获取十六进制格式的哈希值
+    return md5_hash.hexdigest()
+
 # 创建MCP服务器实例
 mcp = FastMCP(
     MCP_SERVER_NAME,
@@ -54,6 +70,82 @@ mcp = FastMCP(
         "loguru"
     ]
 )
+
+
+# <---------------------获取推流地址---------------------> #
+@mcp.tool()
+async def describe_rtmp_addr(
+        ctx: Context,
+        domain_name: str = Field(
+            default=None,
+            description="域名名称。示例值：www.test.com"
+        ),
+        app_name: str = Field(
+            default=None,
+            description="区分同一个域名下多个 App 的地址路径，默认为 live"
+        ),
+        stream_name: str = Field(
+            default=None,
+            description="自定义的流名称，每路直播流的唯一标识符"
+        ),
+        expire_time: Optional[int] = Field(
+            default=7,
+            description="过期时间。默认：7天"
+        )
+) -> str:
+    """
+    获取推流地址
+
+        Args:
+            domain_name: 推流域名
+            app_name:
+            stream_name:
+            expire_time: 过期时间
+
+        Returns:
+            PushAuthKeyInfo: 推流鉴权key信息
+            RTMPAddr: RTMP地址
+            请求ID
+    """
+    logger.info(f"获取推流地址: domain_name={domain_name}, app_name={app_name},"
+                f"stream_name={stream_name}, expire_time={expire_time}")
+
+    try:
+        live_client = LiveClient()
+        # 获取鉴权key
+        result = live_client.describe_live_push_auth_key(
+            domain_name=domain_name
+        )
+        logger.info(f"获取推流地址: result={result}")
+        # 主鉴权key
+        push_auth_key_info = result['Response']['PushAuthKeyInfo']
+        master_auth_key = push_auth_key_info['MasterAuthKey']
+        logger.info(f"push_auth_key_info={push_auth_key_info}, master_auth_key={master_auth_key}")
+        # UNIX时间戳
+        expire_delay = timedelta(days=expire_time)
+        future_time = datetime.now() + expire_delay
+        unix_timestamp = future_time.timestamp()
+        hex_timestamp = format(int(hex(int(unix_timestamp)), 16), 'X')
+        logger.info(f"过期时间的UNIX16进制时间戳：hex_timestamp={hex_timestamp}")
+        # MD5拼接
+        str_for_md5 = master_auth_key + stream_name + hex_timestamp
+        md5_str = md5_encrypt(str_for_md5)
+        logger.info(f"MD5拼接：{str_for_md5},txSecret={md5_str}")
+        # rtmp地址拼接
+        str_for_rtmp = ('rtmp://' + domain_name + '/' + app_name + '/'
+                        + stream_name + '?' + 'txSecret=' + md5_str + '&' + 'txTime=' + hex_timestamp)
+        logger.info(f"rtmp地址={str_for_rtmp}")
+        result['Response']['RTMPAddr'] = str_for_rtmp
+        # 返回result
+        return json.dumps(result, ensure_ascii=False, indent=2)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_msg = f"获取推流地址失败: {e}"
+        logger.error(error_msg)
+        await ctx.error(error_msg)
+        return json.dumps({"error": error_msg}, ensure_ascii=False)
+
+
+# <---------------------获取播放地址---------------------> #
 
 
 # <---------------------域名管理---------------------> #

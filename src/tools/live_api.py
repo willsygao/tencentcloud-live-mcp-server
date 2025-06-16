@@ -33,6 +33,30 @@ class LiveClient(TencentCloudClient):
             region=region
         )
 
+    # <---------------------获取推流地址---------------------> #
+    def describe_live_push_auth_key(
+            self,
+            domain_name: str,
+    ) -> Dict[str, Any]:
+        """
+        获取推流地址
+        Args:
+            domain_name: 推流域名
+
+        Returns:
+            PushAuthKeyInfo: 推流鉴权key信息
+            请求ID
+        """
+        params = {
+            "DomainName": domain_name
+        }
+
+        return self.call_api("DescribeLivePushAuthKey", params)
+
+
+    # <---------------------获取播放地址---------------------> #
+
+
     # <---------------------域名管理---------------------> #
     # 添加域名
     def add_live_domain(
@@ -203,6 +227,9 @@ class LiveClient(TencentCloudClient):
 
         if play_type:
             params["PlayType"] = play_type
+
+        if domain_prefix:
+            params["DomainPrefix"] = domain_prefix
 
         return self.call_api("DescribeLiveDomains", params)
 
