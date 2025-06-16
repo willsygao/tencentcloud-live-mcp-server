@@ -98,9 +98,9 @@ async def describe_rtmp_addr(
 
         Args:
             domain_name: 推流域名
-            app_name:
-            stream_name:
-            expire_time: 过期时间
+            app_name: 区分同一个域名下多个 App 的地址路径
+            stream_name: 流名称
+            expire_time: 过期时间(optional)
 
         Returns:
             PushAuthKeyInfo: 推流鉴权key信息
@@ -116,7 +116,7 @@ async def describe_rtmp_addr(
         result = live_client.describe_live_push_auth_key(
             domain_name=domain_name
         )
-        logger.info(f"获取推流地址: result={result}")
+        logger.info(f"获取鉴权key: result={result}")
         # 主鉴权key
         push_auth_key_info = result['Response']['PushAuthKeyInfo']
         master_auth_key = push_auth_key_info['MasterAuthKey']
@@ -146,6 +146,95 @@ async def describe_rtmp_addr(
 
 
 # <---------------------获取播放地址---------------------> #
+@mcp.tool()
+async def describe_play_addr(
+        ctx: Context,
+        domain_name: str = Field(
+            default=None,
+            description="域名名称。示例值：www.test.com"
+        ),
+        app_name: str = Field(
+            default=None,
+            description="区分同一个域名下多个 App 的地址路径，默认为 live"
+        ),
+        stream_name: str = Field(
+            default=None,
+            description="自定义的流名称，每路直播流的唯一标识符"
+        ),
+        expire_time: Optional[int] = Field(
+            default=7,
+            description="过期时间。默认：7天"
+        ),
+        transcode_template: Optional[int] = Field(
+            default=None,
+            description="转码模版ID"
+        )
+) -> str:
+    """
+    获取播放地址
+
+        Args:
+            domain_name: 推流域名
+            app_name: 区分同一个域名下多个 App 的地址路径
+            stream_name: 流名称
+            expire_time: 过期时间(optional)
+            transcode_template: 转码模版ID(optional)
+
+        Returns:
+            PushAuthKeyInfo: 推流鉴权key信息
+            RTMPAddr: RTMP地址
+            请求ID
+    """
+    logger.info(f"获取播放地址: domain_name={domain_name}, app_name={app_name},"
+                f"stream_name={stream_name}, expire_time={expire_time}")
+
+    try:
+        live_client = LiveClient()
+        # 获取鉴权key
+        result = live_client.describe_live_play_auth_key(
+            domain_name=domain_name
+        )
+        logger.info(f"获取鉴权key: result={result}")
+
+        # rtmp地址拼接
+        basic_addr = '://' + domain_name + '/' + app_name + '/' + stream_name
+        # str_for_rtmp = ('rtmp://' + domain_name + '/' + app_name + '/' + stream_name)
+        # str_for_flv = ('http://' + domain_name + '/' + app_name + '/' + stream_name)
+        # str_for_hls = ('http://' + domain_name + '/' + app_name + '/' + stream_name)
+        if transcode_template is not None:
+            basic_addr += '_' + str(transcode_template)
+        if result['Response']['PlayAuthKeyInfo']['Enable'] is 1:
+            # 主鉴权key
+            play_auth_key_info = result['Response']['PlayAuthKeyInfo']
+            master_auth_key = play_auth_key_info['AuthKey']
+            logger.info(f"play_auth_key_info={play_auth_key_info}, master_auth_key={master_auth_key}")
+            # UNIX时间戳
+            expire_delay = timedelta(days=expire_time)
+            future_time = datetime.now() + expire_delay
+            unix_timestamp = future_time.timestamp()
+            hex_timestamp = format(int(hex(int(unix_timestamp)), 16), 'X')
+            logger.info(f"过期时间的UNIX16进制时间戳：hex_timestamp={hex_timestamp}")
+            # MD5拼接
+            str_for_md5 = master_auth_key + stream_name + hex_timestamp
+            md5_str = md5_encrypt(str_for_md5)
+            logger.info(f"MD5拼接：{str_for_md5}, txSecret={md5_str}")
+            basic_addr += '?' + 'txSecret=' + md5_str + '&' + 'txTime=' + hex_timestamp
+
+        str_for_rtmp = 'rtmp' + basic_addr
+        str_for_flv = 'http' + basic_addr + '.flv'
+        str_for_hls = 'http' + basic_addr + '.m3u8'
+
+        logger.info(f"rtmp地址={str_for_rtmp}, flv地址={str_for_flv}, hls地址={str_for_hls}")
+        result['Response']['RTMPAddr'] = str_for_rtmp
+        result['Response']['FLVAddr'] = str_for_flv
+        result['Response']['HLSAddr'] = str_for_hls
+        # 返回result
+        return json.dumps(result, ensure_ascii=False, indent=2)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_msg = f"获取播放地址失败: {e}"
+        logger.error(error_msg)
+        await ctx.error(error_msg)
+        return json.dumps({"error": error_msg}, ensure_ascii=False)
 
 
 # <---------------------域名管理---------------------> #
@@ -184,10 +273,10 @@ async def add_live_domain(
         Args:
             domain_name: 推流域名
             domain_type: 域名类型
-            play_type: 拉流域名类型
-            is_delay_live: 是否是慢直播
-            is_mini_program_live: 是否是小程序直播
-            verify_owner_type: 域名归属校验类型
+            play_type: 拉流域名类型(optional)
+            is_delay_live: 是否是慢直播(optional)
+            is_mini_program_live: 是否是小程序直播(optional)
+            verify_owner_type: 域名归属校验类型(optional)
 
         Returns:
             请求ID
@@ -390,13 +479,13 @@ async def describe_live_domains(
     查询域名列表
 
         Args:
-            domain_status: 域名状态过滤
-            domain_type: 域名类型
-            page_size: 分页大小
-            page_num: 取第几页
-            is_delay_live: 普通直播/慢直播
-            domain_prefix: 域名前缀
-            play_type: 播放区域
+            domain_status: 域名状态过滤(optional)
+            domain_type: 域名类型(optional)
+            page_size: 分页大小(optional)
+            page_num: 取第几页(optional)
+            is_delay_live: 普通直播/慢直播(optional)
+            domain_prefix: 域名前缀(optional)
+            play_type: 播放区域(optional)
 
         Returns:
             AllCount: 总记录数
@@ -457,7 +546,7 @@ async def delete_live_pull_stream_task(
             region: 地域
             task_id: 任务ID
             operator: 操作人姓名
-            specify_task_id: 指定任务ID
+            specify_task_id: 指定任务ID(optional)
 
         Returns:
             请求ID
@@ -511,9 +600,9 @@ async def describe_live_pull_stream_tasks(
         Args:
             region: 地域
             task_id: 任务ID
-            page_num: 取得第几页
-            page_size: 分页大小
-            specify_task_id: 指定任务ID
+            page_num: 取得第几页(optional)
+            page_size: 分页大小(optional)
+            specify_task_id: 指定任务ID(optional)
 
         Returns:
             TaskInfos: 直播拉流任务信息列表
@@ -665,23 +754,23 @@ async def create_live_pull_stream_task(
             start_time: 开始时间
             end_time: 结束时间
             operator: 任务操作人备注
-            push_args: 推流参数
-            callback_events: 需要回调的事件
-            vod_loop_times: 点播拉流转推循环次数
-            vod_refresh_type: 点播更新SourceUrls后的播放方式
-            callback_url: 自定义回调地址
-            extra_cmd: 其他参数
-            specify_task_id: 自定义任务 ID
-            comment: 任务描述
-            to_url: 完整目标 URL 地址
-            file_index: 指定播放文件索引
-            offset_time: 指定播放文件偏移
-            backup_source_type: 备源的类型
-            backup_source_url: 备源 URL
-            vod_local_mode: 点播源是否启用本地推流模式
-            record_template_id: 录制模板 ID
-            backup_to_url: 新的目标地址，用于任务同时推两路场景
-            transcode_template_name: 直播转码模板
+            push_args: 推流参数(optional)
+            callback_events: 需要回调的事件(optional)
+            vod_loop_times: 点播拉流转推循环次数(optional)
+            vod_refresh_type: 点播更新SourceUrls后的播放方式(optional)
+            callback_url: 自定义回调地址(optional)
+            extra_cmd: 其他参数(optional)
+            specify_task_id: 自定义任务 ID(optional)
+            comment: 任务描述(optional)
+            to_url: 完整目标 URL 地址(optional)
+            file_index: 指定播放文件索引(optional)
+            offset_time: 指定播放文件偏移(optional)
+            backup_source_type: 备源的类型(optional)
+            backup_source_url: 备源 URL(optional)
+            vod_local_mode: 点播源是否启用本地推流模式(optional)
+            record_template_id: 录制模板 ID(optional)
+            backup_to_url: 新的目标地址，用于任务同时推两路场景(optional)
+            transcode_template_name: 直播转码模板(optional)
 
         Returns:
             TaskId: 任务ID
@@ -849,23 +938,23 @@ async def create_live_pull_stream_task(
             start_time: 开始时间
             end_time: 结束时间
             operator: 任务操作人备注
-            push_args: 推流参数
-            callback_events: 需要回调的事件
-            vod_loop_times: 点播拉流转推循环次数
-            vod_refresh_type: 点播更新SourceUrls后的播放方式
-            callback_url: 自定义回调地址
-            extra_cmd: 其他参数
-            specify_task_id: 自定义任务 ID
-            comment: 任务描述
-            to_url: 完整目标 URL 地址
-            file_index: 指定播放文件索引
-            offset_time: 指定播放文件偏移
-            backup_source_type: 备源的类型
-            backup_source_url: 备源 URL
-            vod_local_mode: 点播源是否启用本地推流模式
-            record_template_id: 录制模板 ID
-            backup_to_url: 新的目标地址，用于任务同时推两路场景
-            transcode_template_name: 直播转码模板
+            push_args: 推流参数(optional)
+            callback_events: 需要回调的事件(optional)
+            vod_loop_times: 点播拉流转推循环次数(optional)
+            vod_refresh_type: 点播更新SourceUrls后的播放方式(optional)
+            callback_url: 自定义回调地址(optional)
+            extra_cmd: 其他参数(optional)
+            specify_task_id: 自定义任务 ID(optional)
+            comment: 任务描述(optional)
+            to_url: 完整目标 URL 地址(optional)
+            file_index: 指定播放文件索引(optional)
+            offset_time: 指定播放文件偏移(optional)
+            backup_source_type: 备源的类型(optional)
+            backup_source_url: 备源 URL(optional)
+            vod_local_mode: 点播源是否启用本地推流模式(optional)
+            record_template_id: 录制模板 ID(optional)
+            backup_to_url: 新的目标地址，用于任务同时推两路场景(optional)
+            transcode_template_name: 直播转码模板(optional)
 
         Returns:
             TaskId: 任务ID
@@ -985,11 +1074,11 @@ async def describe_live_stream_online_list(
     查询直播中的流
 
         Args:
-            app_name: 推流路径
-            domain_name: 推流域名
-            page_num: 取的第几页
-            page_size: 每页大小
-            stream_name: 流名称
+            app_name: 推流路径(optional)
+            domain_name: 推流域名(optional)
+            page_num: 取的第几页(optional)
+            page_size: 每页大小(optional)
+            stream_name: 流名称(optional)
 
         Returns:
             正在直播中的流列表
@@ -1137,8 +1226,8 @@ async def forbid_live_stream(
             stream_name: 流名称
             domain_name: 推流域名
             app_name: 推流路径
-            resume_time: 恢复流的时间
-            reason: 禁推原因
+            resume_time: 恢复流的时间(optional)
+            reason: 禁推原因(optional)
 
         Returns:
             请求ID
@@ -1215,12 +1304,12 @@ async def describe_live_stream_event_list(
             end_time: 结束时间
             stream_name: 流名称
             domain_name: 推流域名
-            app_name: 推流路径
-            page_num: 取得第几页
-            page_size: 分页大小
-            is_fiter: 是否过滤
-            is_strict: 是否精确查询
-            is_asc: 是否按结束时间正序显示
+            app_name: 推流路径(optional)
+            page_num: 取得第几页(optional)
+            page_size: 分页大小(optional)
+            is_fiter: 是否过滤(optional)
+            is_strict: 是否精确查询(optional)
+            is_asc: 是否按结束时间正序显示(optional)
 
         Returns:
             EventList: 推断流事件列表
@@ -1287,7 +1376,7 @@ async def add_delay_live_stream(
             domain_name: 推流域名
             app_name: 推流路径
             delay_time: 延播时间
-            expire_time: 延播设置的过期时间
+            expire_time: 延播设置的过期时间(optional)
 
         Returns:
             请求ID
@@ -1457,26 +1546,26 @@ async def create_live_transcode_template(
         Args:
             template_name: 模板名称
             video_bitrate: 视频码率
-            acodec: 音频编码
-            audio_bitrate: 音频码率
-            vcodec: 视频编码
-            description: 模板描述
-            need_video: 是否保留视频
-            width: 宽
-            need_audio: 是否保留音频
-            height: 高
-            fps: 帧率
-            gop: 关键帧间隔
-            rotate: 旋转角度
-            profile: 编码质量
-            bitrate_to_orig: 当设置的码率>原始码率时，是否以原始码率为准
-            height_to_orig: 当设置的高度>原始高度时，是否以原始高度为准
-            fps_to_orig: 当设置的帧率>原始帧率时，是否以原始帧率为准
-            ai_trans_code: 是否是极速高清模板
-            adapt_bitrate_percent: 极速高清视频码率压缩比
-            short_edge_as_height: 是否以短边作为高度
-            drm_type: DRM 加密类型
-            drm_tracks: DRM 加密项
+            acodec: 音频编码(optional)
+            audio_bitrate: 音频码率(optional)
+            vcodec: 视频编码(optional)
+            description: 模板描述(optional)
+            need_video: 是否保留视频(optional)
+            width: 宽(optional)
+            need_audio: 是否保留音频(optional)
+            height: 高(optional)
+            fps: 帧率(optional)
+            gop: 关键帧间隔(optional)
+            rotate: 旋转角度(optional)
+            profile: 编码质量(optional)
+            bitrate_to_orig: 当设置的码率>原始码率时，是否以原始码率为准(optional)
+            height_to_orig: 当设置的高度>原始高度时，是否以原始高度为准(optional)
+            fps_to_orig: 当设置的帧率>原始帧率时，是否以原始帧率为准(optional)
+            ai_trans_code: 是否是极速高清模板(optional)
+            adapt_bitrate_percent: 极速高清视频码率压缩比(optional)
+            short_edge_as_height: 是否以短边作为高度(optional)
+            drm_type: DRM 加密类型(optional)
+            drm_tracks: DRM 加密项(optional)
 
         Returns:
             TemplateId: 模版ID
