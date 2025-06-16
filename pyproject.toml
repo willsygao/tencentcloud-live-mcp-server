@@ -6,7 +6,7 @@ maintainers = [
     {name = "willsygao", email = "shuoyuan.gao0102@gmail.com"}
 ]
 name = "tencentcloud-live-mcp-server"
-version = "1.0.1"
+version = "1.1.0"
 description = "Tencent Cloud API server implemented based on Model Context Protocol (MCP)"
 readme = "README.md"
 requires-python = ">=3.12"
